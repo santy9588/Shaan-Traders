@@ -362,6 +362,14 @@ export default function AuthModal({ onAuthSuccess, onAdminLogin, adminPhone }: A
   const [address, setAddress] = useState('Kankarbagh, Near Shivaji Park, Patna, Bihar, 800020');
   const [coords, setCoords] = useState({ lat: 25.6112, lng: 85.1414 });
   const [coverageRadius, setCoverageRadius] = useState(10); // km
+  const [allSellersList] = useState<UserProfile[]>(() => {
+    try {
+      const stored = localStorage.getItem('freshmarket_registered_users');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Optional Social Handlers & Networking Links
   const [isSocialLinksOpen, setIsSocialLinksOpen] = useState(false);
@@ -1270,6 +1278,7 @@ export default function AuthModal({ onAuthSuccess, onAdminLogin, adminPhone }: A
                     }}
                     radiusKm={role !== 'customer' ? coverageRadius : 5}
                     label="Pin your exact location on Google Maps"
+                    sellers={allSellersList}
                   />
                 </div>
 

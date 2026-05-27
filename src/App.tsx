@@ -19,6 +19,14 @@ export default function App() {
   // Virtual Domain Simulator states (for resolving "www.veg & fruits.com")
   const [activeVirtualDomain, setActiveVirtualDomain] = useState('www.vegfruits.com');
   const [isDomainSettingsOpen, setIsDomainSettingsOpen] = useState(false);
+  const [urlViewMode, setUrlViewMode] = useState<'simulated' | 'live'>('simulated');
+  const [liveAppUrl, setLiveAppUrl] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setLiveAppUrl(window.location.href);
+    }
+  }, []);
 
   // Connectivity & Google Maps API Error States
   const [isOnline, setIsOnline] = useState(() => typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -417,7 +425,7 @@ export default function App() {
     <div className={`${isFullscreen ? 'fixed inset-0 z-50 overflow-y-auto bg-zinc-50' : 'min-h-screen bg-zinc-50'} flex flex-col justify-between selection:bg-emerald-100 font-sans`} id="freshmarket-global-app">
       
       {/* Simulated Web Address & Custom Domain Gateway Bar */}
-      <div className="bg-zinc-900 border-b border-zinc-800 text-zinc-350 px-4 py-2 border-b border-zinc-850 text-xs shrink-0 select-none shadow-md flex flex-col md:flex-row items-center justify-between gap-3 z-40 relative">
+      <div className="bg-zinc-900 border-b border-zinc-805 text-zinc-350 px-4 py-2 border-b border-zinc-850 text-xs shrink-0 select-none shadow-md flex flex-col md:flex-row items-center justify-between gap-3 z-40 relative">
         <div className="flex items-center gap-2">
           {/* Simulated Browser window control circles */}
           <div className="hidden sm:flex items-center gap-1.5 shrink-0 mr-1.5">
@@ -431,45 +439,91 @@ export default function App() {
           <p className="text-[11px] font-semibold text-zinc-400">
             Platform Gateway Resolver
           </p>
-        </div>
+             {/* Browser URL Input Field Simulator */}
+        <div className="flex-1 max-w-xl w-full flex flex-col sm:flex-row items-stretch sm:items-center bg-zinc-950 rounded-xl text-zinc-350 font-mono text-[11px] border border-zinc-805 shadow-inner">
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none px-3 py-1.5 justify-between sm:justify-start">
+            <div className="flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              {urlViewMode === 'simulated' ? (
+                <>
+                  <span className="text-emerald-500 font-bold leading-none">https://</span>
+                  <span 
+                    onClick={() => setIsDomainSettingsOpen(true)}
+                    className="text-white font-extrabold hover:text-emerald-300 transition-colors cursor-pointer decoration-dashed decoration-zinc-650 underline underline-offset-4"
+                    title="Click to check DNS details"
+                  >
+                    {activeVirtualDomain}
+                  </span>
+                </>
+              ) : (
+                <div className="flex items-center gap-1 overflow-x-auto max-w-[200px] sm:max-w-[260px] md:max-w-xs scrollbar-none">
+                  <span className="text-emerald-500 font-bold leading-none shrink-0">Live:</span>
+                  <a 
+                    href={liveAppUrl || '#'} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-white font-semibold hover:text-emerald-300 underline transition-colors"
+                  >
+                    {liveAppUrl || 'detecting route URL...'}
+                  </a>
+                </div>
+              )}
+            </div>
 
-        {/* Browser URL Input Field Simulator */}
-        <div className="flex-1 max-w-xl w-full flex items-center bg-zinc-950 rounded-xl px-3 py-1.5 text-zinc-300 font-mono text-[11px] border border-zinc-800 hover:border-zinc-700 shadow-inner transition duration-150 justify-between gap-2.5">
-          <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap scrollbar-none py-0.5">
-            <Lock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span className="text-emerald-500 font-bold leading-none">https://</span>
-            <span 
-              onClick={() => setIsDomainSettingsOpen(true)}
-              className="text-white font-extrabold hover:text-emerald-300 transition-colors cursor-pointer decoration-dashed decoration-zinc-650 underline underline-offset-4"
-              title="Click to check DNS details"
-            >
-              {activeVirtualDomain}
-            </span>
-            <span className="text-zinc-500 select-none font-sans font-black text-[9px] bg-zinc-900 px-1.5 py-0.5 rounded ml-1 uppercase tracking-wider border border-zinc-850">
-              {activeVirtualDomain === 'www.vegfruits.com' ? 'Veg & Fruits Group Domain' : 'Direct Target IP'}
-            </span>
+            <div className="flex items-center gap-1">
+              <span className="text-[8px] px-1 rounded font-sans uppercase tracking-wider font-extrabold select-none bg-zinc-900 border border-zinc-850 text-zinc-450">
+                {urlViewMode === 'simulated' ? 'SIM DOMAIN' : 'LIVE IP'}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button 
-              onClick={() => {
-                setActiveVirtualDomain(activeVirtualDomain === 'www.vegfruits.com' ? 'www.veg-and-fruits.com' : 'www.vegfruits.com');
-              }}
-              className="p-1 hover:bg-zinc-800 hover:text-white rounded text-zinc-400 transition cursor-pointer"
-              title="Toggle alternative simulated mirror url (without ampersand)"
+          <div className="flex items-center gap-1.5 shrink-0 border-t sm:border-t-0 sm:border-l border-zinc-850 px-3 py-1.5 justify-end">
+            {/* View Mode Switcher */}
+            <button
+              onClick={() => setUrlViewMode(urlViewMode === 'simulated' ? 'live' : 'simulated')}
+              className="text-[9px] font-sans font-bold bg-zinc-900 hover:bg-zinc-850 active:bg-zinc-800 px-2 py-1 rounded-lg text-emerald-400 hover:text-emerald-300 border border-zinc-800 transition cursor-pointer flex items-center gap-1 shrink-0"
+              title={urlViewMode === 'simulated' ? 'Show actual container live URL' : 'Show simulated business domain URL'}
             >
-              <RefreshCw className="w-3.5 h-3.5 text-zinc-400 active:rotate-180 transition-transform duration-300 animate-pulse" />
+              <Globe className="w-3 h-3 text-emerald-405" />
+              <span>{urlViewMode === 'simulated' ? 'Flip to Live URL' : 'Flip to Sim'}</span>
             </button>
+            
+            {/* Action Buttons */}
+            {urlViewMode === 'simulated' ? (
+              <button 
+                onClick={() => {
+                  setActiveVirtualDomain(activeVirtualDomain === 'www.vegfruits.com' ? 'www.veg-and-fruits.com' : 'www.vegfruits.com');
+                }}
+                className="p-1 hover:bg-zinc-800 hover:text-white rounded text-zinc-400 transition cursor-pointer shrink-0"
+                title="Toggle alternative simulated mirror url"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-zinc-405 active:rotate-180 transition-transform duration-300" />
+              </button>
+            ) : (
+              <button 
+                onClick={() => {
+                  if (liveAppUrl) {
+                    navigator.clipboard.writeText(liveAppUrl);
+                    setCopiedText('liveUrl');
+                    setTimeout(() => setCopiedText(null), 2000);
+                  }
+                }}
+                className="p-1 hover:bg-zinc-800 hover:text-white rounded transition cursor-pointer shrink-0"
+                title="Copy live preview URL connection link"
+              >
+                {copiedText === 'liveUrl' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-450 hover:text-white" />}
+              </button>
+            )}
+
             <button 
               onClick={() => setIsDomainSettingsOpen(true)}
-              className="p-1 hover:bg-zinc-800 hover:text-white rounded text-emerald-400 transition flex items-center gap-1 ml-1 cursor-pointer"
-              title="Inspect DNS records for www.veg & fruits.com"
+              className="p-1 hover:bg-zinc-800 hover:text-white rounded text-emerald-400 transition flex items-center gap-1 cursor-pointer shrink-0"
+              title="Inspect DNS records settings"
             >
-              <Settings className="w-3.5 h-3.5 text-emerald-400 animate-spin-slow" />
-              <span className="text-[10px] font-sans font-black uppercase text-emerald-450 hidden sm:inline leading-none">Settings</span>
+              <Settings className="w-3.5 h-3.5 text-emerald-400" />
             </button>
           </div>
-        </div>
+        </div>     </div>
 
         {/* Connection & Maps Simulation Toggles for presentation */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
@@ -771,6 +825,7 @@ export default function App() {
             products={products}
             onProductsChange={setProducts}
             onUpdateProfile={handleUpdateUserProfile}
+            sellers={registeredUsers}
           />
         ) : null}
 

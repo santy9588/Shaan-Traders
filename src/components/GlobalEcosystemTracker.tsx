@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { 
   Globe, MapPin, Compass, Search, Filter, ShieldCheck, 
   Map as MapIcon, Layers, Radio, Locate, Navigation2, Check,
   X, HelpCircle, Phone, ArrowUpRight, Award, Landmark, User,
-  Share2, Crosshair, Users
+  Share2, Crosshair, Users, MessageSquare, Send
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 
@@ -67,6 +68,28 @@ export default function GlobalEcosystemTracker({
   const [selectedPartner, setSelectedPartner] = useState<UserProfile | null>(null);
   const [simulatedDirections, setSimulatedDirections] = useState<{ path: {lat: number, lng: number}[], distance: number, r: number } | null>(null);
 
+  // States for real-time trade chat
+  const [activePartnerTab, setActivePartnerTab] = useState<'info' | 'chat'>('info');
+  const [chatInput, setChatInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{[key: string]: { sender: string; text: string; timestamp: string }[]}>(() => {
+    try {
+      const saved = localStorage.getItem('freshmarket_trade_chats');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Save chat history to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('freshmarket_trade_chats', JSON.stringify(chatHistory));
+    } catch (e) {
+      console.warn("Failed to write trade chats to storage", e);
+    }
+  }, [chatHistory]);
+
   // Fallback API key verification
   const apiKey = process.env.GOOGLE_MAPS_PLATFORM_KEY || '';
   const [mapsAuthFailed, setMapsAuthFailed] = useState(() => (window as any).googleMapsAuthFailed || false);
@@ -128,16 +151,17 @@ export default function GlobalEcosystemTracker({
     return [...realUsersFormatted, ...localizedSeeded];
   }, [registeredUsers, currentUser, mapCenter]);
 
-  // Handle radius & search filters
+  // Handle radius & search filters and sort by distance from current user's location (home/center location)
   const filteredPartners = useMemo(() => {
-    return allMapPartners.filter(partner => {
+    const currentLoc = currentUser?.coordinates || mapCenter;
+
+    const filtered = allMapPartners.filter(partner => {
       // 1. Filter by role
       if (filterRole !== 'all' && partner.role !== filterRole) {
         return false;
       }
 
       // 2. Filter by distance (Strictly check approx 10 Kilometer radius bounds from map center or user's coordinates)
-      const currentLoc = currentUser?.coordinates || mapCenter;
       const distance = calculateHaversineDistance(
         currentLoc.lat,
         currentLoc.lng,
@@ -161,6 +185,23 @@ export default function GlobalEcosystemTracker({
       }
 
       return true;
+    });
+
+    // Sort by distance (ascending) from current user's location (homeLoc)
+    return [...filtered].sort((a, b) => {
+      const distA = calculateHaversineDistance(
+        currentLoc.lat,
+        currentLoc.lng,
+        a.coordinates.lat,
+        a.coordinates.lng
+      );
+      const distB = calculateHaversineDistance(
+        currentLoc.lat,
+        currentLoc.lng,
+        b.coordinates.lat,
+        b.coordinates.lng
+      );
+      return distA - distB;
     });
   }, [allMapPartners, filterRole, onlyWithin10Km, searchQuery, mapCenter, currentUser]);
 
@@ -242,6 +283,7 @@ export default function GlobalEcosystemTracker({
   // Select partner to inspect details and show Navigation
   const handleSelectPartner = (partner: UserProfile) => {
     setSelectedPartner(partner);
+    setActivePartnerTab('info');
     
     // Generate dynamic simulation path
     const startLoc = currentUser?.coordinates || mapCenter;
@@ -261,6 +303,68 @@ export default function GlobalEcosystemTracker({
       distance: dist,
       r: Math.floor(Math.random() * 3) + 12 // estimated travel minutes
     });
+  };
+
+  // Helper to send real-time chat direct inquiry
+  const handleSendChatMessage = (text: string) => {
+    if (!text.trim() || !selectedPartner) return;
+    const userPhone = currentUser?.phone || 'visitor';
+    const comboKey = `${userPhone}_${selectedPartner.id}`;
+    
+    const userMessage = {
+      sender: 'user',
+      text: text.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    // Default greeting if history is empty
+    const defaultGreeting = {
+      sender: 'partner',
+      text: `Hello! I am ${selectedPartner.name}, registered as a ${selectedPartner.role.replace('_', ' ')} inside this coverage zone. Let's establish secure direct terms on supply routing, wholesale pricing, or immediate delivery terms! 🌾`,
+      timestamp: 'Just now'
+    };
+    
+    const currentMessages = chatHistory[comboKey] || [defaultGreeting];
+    const updatedMessages = [...currentMessages, userMessage];
+    
+    setChatHistory(prev => ({
+      ...prev,
+      [comboKey]: updatedMessages
+    }));
+    setChatInput('');
+    setIsTyping(true);
+
+    // Dynamic simulated reply after 1.1s
+    setTimeout(() => {
+      setIsTyping(false);
+      
+      let replyText = `Thanks for your trade inquiry! As a certified ${selectedPartner.role.replace('_', ' ')} based here, we have fresh harvests ready. Can you share your target pickup date & volume requirements?`;
+      
+      const lowerText = text.toLowerCase();
+      if (lowerText.includes('price') || lowerText.includes('rate') || lowerText.includes('cost') || lowerText.includes('how much') || lowerText.includes('₹') || lowerText.includes('rs')) {
+        replyText = `Our wholesale rates are extremely competitive. For bulk trade orders, we route on highly favorable terms. How many metric tons or bags do you require?`;
+      } else if (lowerText.includes('deliver') || lowerText.includes('delivery') || lowerText.includes('location') || lowerText.includes('distance') || lowerText.includes('km') || lowerText.includes('where')) {
+        replyText = `Our active dispatch geofence zone is styled for up to ${selectedPartner.coverageRadius || 10} km limit. Since our circles overlap on the map, we can arrange direct transport!`;
+      } else if (lowerText.includes('quality') || lowerText.includes('organic') || lowerText.includes('pure') || lowerText.includes('fresh')) {
+        replyText = `Our crops are carefully sun-matured, 100% traceably sorted, and quality check certified before being packed. High standards guaranteed!`;
+      } else if (lowerText.includes('hello') || lowerText.includes('hi') || lowerText.includes('hey')) {
+        replyText = `Greetings! Always fantastic to establish connection with potential trading buyers. How can we cooperate today?`;
+      }
+      
+      const partnerMessage = {
+        sender: 'partner',
+        text: replyText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setChatHistory(prev => {
+        const current = prev[comboKey] || [];
+        return {
+          ...prev,
+          [comboKey]: [...current, partnerMessage]
+        };
+      });
+    }, 1100);
   };
 
   const getRoleBadgeColor = (role: UserRole) => {
@@ -845,122 +949,259 @@ export default function GlobalEcosystemTracker({
                     {partner.name.split(' ')[0]} ({getRoleIconEmoji(partner.role)})
                   </div>
 
-                  {/* Pin Circle element */}
-                  <div className={`relative transition-all duration-200 ${isSelected ? 'scale-125 z-20' : 'hover:scale-110'}`}>
+                  {/* Pin Circle element with Framer Motion animations */}
+                  <motion.div
+                    animate={{
+                      scale: isSelected ? 1.35 : 1.0,
+                    }}
+                    whileHover={{ 
+                      scale: isSelected ? 1.45 : 1.15
+                    }}
+                    whileTap={{ scale: 0.95 }}
+                    transition={{ type: 'spring', stiffness: 350, damping: 18 }}
+                    className={`relative rounded-full z-10 ${isSelected ? 'z-20' : ''}`}
+                  >
                     {isSelected && (
                       <span className="absolute -top-1.5 -left-1.5 w-8 h-8 rounded-full bg-emerald-500/35 animate-ping"></span>
                     )}
-                    <div className={`w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-md ${
-                      partner.role === 'customer' ? 'bg-purple-600' :
-                      partner.role === 'farmer' ? 'bg-emerald-600' :
-                      partner.role === 'organic_producer' ? 'bg-teal-600' :
-                      partner.role === 'wholesaler' ? 'bg-amber-600' :
-                      partner.role === 'retailer' ? 'bg-orange-600' :
-                      partner.role === 'supplier' ? 'bg-sky-600' : 'bg-indigo-600'
-                    }`}>
+                    <motion.div 
+                      className={`w-5 h-5 rounded-full border-2 border-white flex items-center justify-center ${
+                        partner.role === 'customer' ? 'bg-purple-600' :
+                        partner.role === 'farmer' ? 'bg-emerald-600' :
+                        partner.role === 'organic_producer' ? 'bg-teal-600' :
+                        partner.role === 'wholesaler' ? 'bg-amber-600' :
+                        partner.role === 'retailer' ? 'bg-orange-600' :
+                        partner.role === 'supplier' ? 'bg-sky-600' : 'bg-indigo-600'
+                      }`}
+                      animate={{
+                        boxShadow: isSelected 
+                          ? '0 12px 20px -3px rgba(0, 0, 0, 0.455), 0 6px 12px -2px rgba(0, 0, 0, 0.35)' 
+                          : '0 2px 3.5px -1px rgba(0, 0, 0, 0.15)'
+                      }}
+                      transition={{ duration: 0.25 }}
+                    >
                       <span className="text-[10px] select-none leading-none">
                         {getRoleIconEmoji(partner.role)}
                       </span>
-                    </div>
-                  </div>
+                    </motion.div>
+                  </motion.div>
                 </div>
               );
             })}
 
             {/* Floating Navigation Instructions Popup inside Map */}
-            {selectedPartner && (
-              <div 
-                className="absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:w-[440px] bg-zinc-950/95 text-white border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col gap-4.5 animate-in slide-in-from-bottom duration-300 backdrop-blur-md"
-                onClick={(e) => e.stopPropagation()}
-              >
-                
-                {/* Header */}
-                <div className="flex justify-between items-start pb-3 border-b border-zinc-800/80">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-zinc-800 border border-zinc-700/60 rounded-xl flex items-center justify-center text-xl shadow-inner shrink-0 leading-none">
-                      {getRoleIconEmoji(selectedPartner.role)}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-extrabold text-sm truncate text-white">{selectedPartner.name}</p>
-                      <p className="text-[10px] text-zinc-400 font-bold truncate">
-                        🏢 {selectedPartner.businessName || 'Ecosystem Associate'}
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => { setSelectedPartner(null); setSimulatedDirections(null); }}
-                    className="p-1 rounded-full bg-zinc-800 hover:bg-zinc-750 text-zinc-400 hover:text-white transition"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+            {selectedPartner && (() => {
+              const comboKey = `${currentUser?.phone || 'visitor'}_${selectedPartner.id}`;
+              const defaultGreeting = {
+                sender: 'partner',
+                text: `Hello! I am ${selectedPartner.name}, registered as a ${selectedPartner.role.replace('_', ' ')} inside this coverage zone. Let's establish secure direct terms on supply routing, wholesale pricing, or immediate delivery terms! 🌾`,
+                timestamp: 'Just now'
+              };
+              const messages = chatHistory[comboKey] || [defaultGreeting];
 
-                {/* Details Body */}
-                <div className="space-y-3.5 text-xs text-zinc-350">
+              return (
+                <div 
+                  className="absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:w-[440px] bg-zinc-950/95 text-white border border-zinc-800 rounded-3xl p-5 shadow-2xl flex flex-col gap-3.5 animate-in slide-in-from-bottom duration-300 backdrop-blur-md"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   
-                  <div className="grid grid-cols-2 gap-2.5">
-                    
-                    <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-xl">
-                      <p className="text-[8px] font-black text-zinc-400 tracking-wider uppercase mb-0.5">Contact Number</p>
-                      <p className="font-bold text-zinc-100 font-mono text-[10.5px] whitespace-nowrap">+91 {selectedPartner.phone}</p>
-                    </div>
-
-                    <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-xl">
-                      <p className="text-[8px] font-black text-zinc-400 tracking-wider uppercase mb-0.5">Role Node</p>
-                      <span className="inline-block bg-zinc-850 px-2 py-0.5 rounded font-black font-mono text-[9px] text-emerald-400 uppercase leading-none">
-                        {selectedPartner.role.replace('_', ' ')}
-                      </span>
-                    </div>
-
-                  </div>
-
-                  {/* Navigation stats */}
-                  {simulatedDirections && (
-                    <div className="bg-emerald-950/40 border border-emerald-900/50 p-3.5 rounded-2xl flex justify-between items-center bg-gradient-to-r from-emerald-950/30 to-zinc-900">
-                      <div className="space-y-0.5">
-                        <span className="text-[8px] font-black tracking-widest text-emerald-400 uppercase block leading-none">
-                          SIMULATED ECOSYSTEM NAVIGATION
-                        </span>
-                        <p className="font-bold text-zinc-100 truncate text-[11px] leading-relaxed pt-1">
-                          🚗 Driving Distance: <strong className="text-emerald-400 text-xs font-mono">{simulatedDirections.distance.toFixed(1)} KM</strong>
+                  {/* Header */}
+                  <div className="flex justify-between items-start pb-2 border-b border-zinc-800/80">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-zinc-800 border border-zinc-700/60 rounded-xl flex items-center justify-center text-xl shadow-inner shrink-0 leading-none">
+                        {getRoleIconEmoji(selectedPartner.role)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-sm truncate text-white">{selectedPartner.name}</p>
+                        <p className="text-[10px] text-zinc-400 font-bold truncate">
+                          🏢 {selectedPartner.businessName || 'Ecosystem Associate'}
                         </p>
                       </div>
-                      <span className="bg-emerald-600 text-white font-mono text-[10px] font-black px-2 py-1 rounded-lg">
-                        ~{simulatedDirections.r} Mins ETA
-                      </span>
+                    </div>
+                    <button 
+                      onClick={() => { setSelectedPartner(null); setSimulatedDirections(null); }}
+                      className="p-1 rounded-full bg-zinc-800 hover:bg-zinc-750 text-zinc-400 hover:text-white transition"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Tab Selector buttons */}
+                  <div className="flex bg-zinc-90 w-full p-1 rounded-xl border border-zinc-800/80">
+                    <button
+                      type="button"
+                      onClick={() => setActivePartnerTab('info')}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-250 cursor-pointer ${
+                        activePartnerTab === 'info'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      📂 Sourcing Info
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivePartnerTab('chat')}
+                      className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-250 cursor-pointer flex items-center justify-center gap-1.5 ${
+                        activePartnerTab === 'chat'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      💬 Trade Inquiry Chat
+                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                    </button>
+                  </div>
+
+                  {activePartnerTab === 'info' ? (
+                    <>
+                      {/* Details Body */}
+                      <div className="space-y-3.5 text-xs text-zinc-350">
+                        
+                        <div className="grid grid-cols-2 gap-2.5">
+                          
+                          <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-xl">
+                            <p className="text-[8px] font-black text-zinc-400 tracking-wider uppercase mb-0.5">Contact Number</p>
+                            <p className="font-bold text-zinc-100 font-mono text-[10.5px] whitespace-nowrap">+91 {selectedPartner.phone}</p>
+                          </div>
+
+                          <div className="bg-zinc-900 border border-zinc-800 p-2.5 rounded-xl">
+                            <p className="text-[8px] font-black text-zinc-400 tracking-wider uppercase mb-0.5">Role Node</p>
+                            <span className="inline-block bg-zinc-850 px-2 py-0.5 rounded font-black font-mono text-[9px] text-emerald-400 uppercase leading-none">
+                              {selectedPartner.role.replace('_', ' ')}
+                            </span>
+                          </div>
+
+                        </div>
+
+                        {/* Navigation stats */}
+                        {simulatedDirections && (
+                          <div className="bg-emerald-950/40 border border-emerald-900/50 p-3.5 rounded-2xl flex justify-between items-center bg-gradient-to-r from-emerald-950/30 to-zinc-900">
+                            <div className="space-y-0.5">
+                              <span className="text-[8px] font-black tracking-widest text-emerald-400 uppercase block leading-none">
+                                SIMULATED ECOSYSTEM NAVIGATION
+                              </span>
+                              <p className="font-bold text-zinc-100 truncate text-[11px] leading-relaxed pt-1">
+                                🚗 Driving Distance: <strong className="text-emerald-400 text-xs font-mono">{simulatedDirections.distance.toFixed(1)} KM</strong>
+                              </p>
+                            </div>
+                            <span className="bg-emerald-600 text-white font-mono text-[10px] font-black px-2 py-1 rounded-lg">
+                              ~{simulatedDirections.r} Mins ETA
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black tracking-widest text-zinc-400 uppercase">SAT-RECORDED ADDRESS</span>
+                          <p className="text-[11px] font-medium leading-relaxed text-zinc-100">
+                            📍 {selectedPartner.address}
+                          </p>
+                        </div>
+
+                      </div>
+                    </>
+                  ) : (
+                    /* Trade Chat Interface */
+                    <div className="flex flex-col gap-2.5" id="trade-inquiry-dialog">
+                      {/* Sub message explaining sandbox */}
+                      <p className="text-[9.5px] text-zinc-400 leading-tight">
+                        Secure instant trade query with <span className="font-bold text-emerald-400">{selectedPartner.name}</span> over live satellite mesh.
+                      </p>
+
+                      {/* Chat Messages Log Area */}
+                      <div className="bg-zinc-900/90 border border-zinc-850 rounded-2xl p-3.5 space-y-3 max-h-[160px] min-h-[110px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800 flex flex-col">
+                        {messages.map((msg, i) => {
+                          const isYou = msg.sender === 'user';
+                          return (
+                            <div key={i} className={`flex flex-col ${isYou ? 'items-end' : 'items-start'} leading-none`}>
+                              <div className={`p-2.5 rounded-2xl text-[11px] max-w-[90%] leading-relaxed shadow-xs ${
+                                isYou 
+                                  ? 'bg-emerald-600 text-white rounded-tr-none' 
+                                  : 'bg-zinc-850 text-zinc-150 rounded-tl-none font-medium'
+                              }`}>
+                                {msg.text}
+                              </div>
+                              <span className="text-[7.5px] font-bold text-zinc-500 mt-1 mb-1 px-1">{msg.timestamp}</span>
+                            </div>
+                          );
+                        })}
+
+                        {/* Typing indicator */}
+                        {isTyping && (
+                          <div className="flex items-center gap-1 bg-zinc-850 border border-zinc-800 px-3 py-2 rounded-2xl rounded-tl-none self-start max-w-[65px] mt-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-75"></span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-150"></span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Suggested quick inquiry chip triggers */}
+                      <div className="flex flex-wrap gap-1 bg-zinc-900/40 p-1.5 rounded-lg border border-zinc-900/65">
+                        {[
+                          "What is the best wholesale price?",
+                          "Is delivery available in our zone?",
+                          "Can you share certification/quality?"
+                        ].map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSendChatMessage(suggestion)}
+                            className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-100 px-2 py-0.5 rounded-md text-[8.5px] font-black transition-colors cursor-pointer"
+                          >
+                            💡 "{suggestion.split(' ')[2] === 'best' ? 'Best Price' : suggestion.split(' ')[1] === 'delivery' ? 'Delivery Zone' : 'Quality'}"
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Message submit form input */}
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleSendChatMessage(chatInput);
+                        }}
+                        className="flex gap-1.5"
+                      >
+                        <input
+                          type="text"
+                          value={chatInput}
+                          onChange={(e) => setChatInput(e.target.value)}
+                          placeholder={`Type trade inquiry (e.g. Price)...`}
+                          className="flex-1 bg-zinc-900 border border-zinc-800 focus:border-emerald-600 text-white placeholder-zinc-500 rounded-xl px-3 py-2 text-xs outline-hidden font-medium"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!chatInput.trim()}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-xl disabled:opacity-40 disabled:hover:bg-emerald-600 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </form>
                     </div>
                   )}
 
-                  <div className="space-y-1">
-                    <span className="text-[8px] font-black tracking-widest text-zinc-400 uppercase">SAT-RECORDED ADDRESS</span>
-                    <p className="text-[11px] font-medium leading-relaxed text-zinc-100">
-                      📍 {selectedPartner.address}
-                    </p>
-                  </div>
+                  {/* Switch Login Trigger for Sandbox testing */}
+                  {onSwitchUser && (
+                    <div className="pt-2 border-t border-zinc-800/80 flex gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => onSwitchUser(selectedPartner.phone)}
+                        className="flex-1 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-850 text-white rounded-xl font-bold uppercase text-[9px] tracking-wider transition-all shadow-md cursor-pointer flex items-center justify-center gap-1 leading-none"
+                      >
+                        <Locate className="w-3 h-3" /> Switch Profile & Settle Trade
+                      </button>
+                      <a
+                        href={`tel:${selectedPartner.phone}`}
+                        className="px-3 py-1.5 rounded-xl border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 text-zinc-300 hover:text-zinc-100 transition flex items-center justify-center"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
 
                 </div>
-
-                {/* Switch Login Trigger for Sandbox testing */}
-                {onSwitchUser && (
-                  <div className="pt-2.5 border-t border-zinc-800/80 flex gap-2 w-full">
-                    <button
-                      type="button"
-                      onClick={() => onSwitchUser(selectedPartner.phone)}
-                      className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-850 text-white rounded-xl font-bold uppercase text-[9px] tracking-wider transition-all shadow-md cursor-pointer flex items-center justify-center gap-1 leading-none"
-                    >
-                      <Locate className="w-3.5 h-3.5" /> Switch Profile & Settle Trade
-                    </button>
-                    <a
-                      href={`tel:${selectedPartner.phone}`}
-                      className="px-3.5 py-2.5 rounded-xl border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900 text-zinc-300 hover:text-zinc-100 transition flex items-center justify-center"
-                    >
-                      <Phone className="w-4 h-4" />
-                    </a>
-                  </div>
-                )}
-
-              </div>
-            )}
+              );
+            })()}
 
             {/* General Empty Canvas relocate instructions */}
             {!selectedPartner && (

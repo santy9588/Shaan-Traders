@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { jsPDF } from 'jspdf';
 import { CartItem, UserProfile, Order } from '../types';
-import { CreditCard, BadgeCheck, CheckCircle2, Ticket, Smartphone, MapPin, Truck, ChevronRight, X, Phone, User, Landmark, Tag, ShieldCheck, Mail } from 'lucide-react';
+import { CreditCard, BadgeCheck, CheckCircle2, Ticket, Smartphone, MapPin, Truck, ChevronRight, X, Phone, User, Landmark, Tag, ShieldCheck, Mail, Download } from 'lucide-react';
 
 interface CheckoutModalProps {
   cart: CartItem[];
@@ -185,6 +186,177 @@ export default function CheckoutModal({
     } else {
       setOtpError('Incorrect placement verification OTP. Please verify or request a fresh one.');
     }
+  };
+
+  const handleDownloadInvoice = () => {
+    if (!finalCreatedOrder) return;
+    
+    // Initialize jsPDF (A4 portrait size in millimeters)
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const primaryColor = { r: 16, g: 185, b: 129 }; // Emerald-500
+    const darkColor = { r: 24, g: 24, b: 27 };       // Zinc-900
+    const lightGrey = { r: 244, g: 244, b: 245 };    // Zinc-100
+    const borderGrey = { r: 228, g: 228, b: 231 };   // Zinc-200
+
+    // Top Brand Accent Header
+    doc.setFillColor(primaryColor.r, primaryColor.g, primaryColor.b);
+    doc.rect(0, 0, 210, 38, 'F');
+
+    // Title Title & Metadata
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.text('FRESHMARKET INVOICE', 14, 16);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Secure Decentralized Farm-to-Fork Exchange Protocol', 14, 22);
+    doc.text(`Generated At: ${new Date().toLocaleDateString()} ${finalCreatedOrder.timestamp}`, 14, 27);
+
+    // Order ID Block
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`ID: ${finalCreatedOrder.id}`, 196, 16, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Status: Paid & Certified', 196, 22, { align: 'right' });
+
+    // Grid Container for customer & partner info
+    let y = 52;
+    doc.setFillColor(lightGrey.r, lightGrey.g, lightGrey.b);
+    doc.roundedRect(12, y, 186, 32, 2, 2, 'F');
+    doc.setDrawColor(borderGrey.r, borderGrey.g, borderGrey.b);
+    doc.roundedRect(12, y, 186, 32, 2, 2, 'S');
+
+    // Customer column
+    doc.setTextColor(darkColor.r, darkColor.g, darkColor.b);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('BUYER / RECIPIENT INFORMATION', 18, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Name: ${finalCreatedOrder.customerName}`, 18, y + 12);
+    doc.text(`Phone: +91 ${finalCreatedOrder.customerPhone}`, 18, y + 17);
+    doc.text(`Location: ${finalCreatedOrder.address}`, 18, y + 22, { maxWidth: 84 });
+
+    // Partner/Seller column
+    doc.setFont('helvetica', 'bold');
+    doc.text('DISPATCH CARRIER PARTNER', 110, y + 6);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Business: ${finalCreatedOrder.sellerName}`, 110, y + 12);
+    doc.text(`Role: ${selectedSeller.role.replace('_', ' ').toUpperCase()}`, 110, y + 17);
+    doc.text(`Phone: +91 ${selectedSeller.phone}`, 110, y + 22);
+
+    // Amber Alert Box for delivery OTP representation
+    y = 96;
+    doc.setFillColor(254, 243, 199); // Amber-100
+    doc.roundedRect(12, y, 186, 16, 2, 2, 'F');
+    doc.setDrawColor(251, 191, 36);   // Amber-400
+    doc.roundedRect(12, y, 186, 16, 2, 2, 'S');
+
+    doc.setTextColor(146, 64, 14); // Amber-800
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text('🚨 MANDATORY POINT-OF-DELIVERY OTP HANDSHAKE:', 18, y + 6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text(`${finalCreatedOrder.otp}`, 18, y + 12.5);
+
+    doc.setTextColor(180, 83, 9);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Provide this security code strictly during physical handover at your doorstep.', 112, y + 10);
+
+    // Products Table head
+    y = 124;
+    doc.setTextColor(darkColor.r, darkColor.g, darkColor.b);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('ORDER SOURCING LIST', 14, y);
+    
+    doc.setLineWidth(0.3);
+    doc.setDrawColor(darkColor.r, darkColor.g, darkColor.b);
+    doc.line(14, y + 2, 196, y + 2);
+
+    y += 8;
+    doc.setFontSize(9);
+    doc.text('Produce Item', 16, y);
+    doc.text('Unit Rate', 95, y, { align: 'right' });
+    doc.text('Qty', 130, y, { align: 'right' });
+    doc.text('Total (INR)', 194, y, { align: 'right' });
+
+    doc.line(14, y + 2, 196, y + 2);
+
+    y += 7;
+    // Walk over items
+    finalCreatedOrder.items.forEach((item) => {
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${item.product.name} (${item.product.origin})`, 16, y);
+      doc.text(`₹${item.product.price}/${item.product.unit}`, 95, y, { align: 'right' });
+      doc.text(`${item.quantity} ${item.product.unit}`, 130, y, { align: 'right' });
+      doc.text(`₹${(item.product.price * item.quantity).toFixed(0)}`, 194, y, { align: 'right' });
+      
+      doc.setDrawColor(borderGrey.r, borderGrey.g, borderGrey.b);
+      doc.line(14, y + 2.5, 196, y + 2.5);
+      y += 7;
+    });
+
+    // Totals Breakdown
+    y += 2;
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cart Subtotal:', 140, y, { align: 'right' });
+    doc.text(`₹${finalCreatedOrder.subtotal.toFixed(2)}`, 194, y, { align: 'right' });
+    
+    y += 5.5;
+    if (finalCreatedOrder.discount > 0) {
+      doc.text('Guild / Affiliate Discount:', 140, y, { align: 'right' });
+      doc.setTextColor(220, 38, 38); // Red text
+      doc.text(`- ₹${finalCreatedOrder.discount.toFixed(2)}`, 194, y, { align: 'right' });
+      doc.setTextColor(darkColor.r, darkColor.g, darkColor.b);
+      y += 5.5;
+    }
+
+    doc.text('GPS Delivery Fee:', 140, y, { align: 'right' });
+    doc.text(`₹${finalCreatedOrder.deliveryCharge.toFixed(2)}`, 194, y, { align: 'right' });
+
+    y += 5.5;
+    doc.setDrawColor(darkColor.r, darkColor.g, darkColor.b);
+    doc.line(125, y - 2, 196, y - 2);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.text('Net Total Paid amount:', 140, y + 2.5, { align: 'right' });
+    doc.text(`₹${finalCreatedOrder.total.toFixed(2)}`, 194, y + 2.5, { align: 'right' });
+
+    // Payment Auth
+    y += 18;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Gateway Settlement: Verified through ${finalCreatedOrder.paymentMethod} (${finalCreatedOrder.paymentStatus === 'completed' ? 'Paid - Digital Auth' : 'Pending Handoff / COD'})`, 14, y);
+
+    if (finalCreatedOrder.affiliateCodeUsed) {
+      y += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(109, 40, 217); // Purple
+      doc.text(`Trade Guild Referral Applied: ${finalCreatedOrder.affiliateCodeUsed} (Verified Partner: ${finalCreatedOrder.affiliatePartnerName})`, 14, y);
+      doc.setTextColor(darkColor.r, darkColor.g, darkColor.b);
+    }
+
+    // Centered professional footer stamp
+    doc.setDrawColor(borderGrey.r, borderGrey.g, borderGrey.b);
+    doc.line(14, 275, 196, 275);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(113, 113, 122);
+    doc.text('This digital invoice receipt is issued securely on behalf of local farmers and growers. Thank you for buying direct.', 105, 281, { align: 'center' });
+
+    // Save
+    doc.save(`FreshMarket_Receipt_${finalCreatedOrder.id}.pdf`);
   };
 
   return (
@@ -498,6 +670,18 @@ export default function CheckoutModal({
                   <span className="text-zinc-500 uppercase font-bold text-[9px]">Carrier Partner</span>
                   <span className="font-bold text-emerald-800">{selectedSeller.businessName || selectedSeller.name}</span>
                 </div>
+              </div>
+
+              {/* PDF Secure Invoice Download action button */}
+              <div className="max-w-sm mx-auto">
+                <button
+                  type="button"
+                  id="btn-download-invoice"
+                  onClick={handleDownloadInvoice}
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="w-4.5 h-4.5" /> Download Invoice (PDF)
+                </button>
               </div>
 
               {/* Direct call action */}

@@ -15,6 +15,7 @@ interface SellerDashboardProps {
   products: Product[];
   onProductsChange: (newProducts: Product[]) => void;
   onUpdateProfile: (updatedProfile: UserProfile) => void;
+  sellers?: UserProfile[];
 }
 
 export default function SellerDashboard({
@@ -23,8 +24,20 @@ export default function SellerDashboard({
   onUpdateOrderStatus,
   products,
   onProductsChange,
-  onUpdateProfile
+  onUpdateProfile,
+  sellers = []
 }: SellerDashboardProps) {
+  // Fallback to localStorage registeredUsers for visual map overlay
+  const [allSellers] = useState<UserProfile[]>(() => {
+    if (sellers && sellers.length > 0) return sellers;
+    try {
+      const stored = localStorage.getItem('freshmarket_registered_users');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   // Navigation: 'orders' | 'products' | 'profile'
   const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'profile'>('orders');
 
@@ -552,6 +565,7 @@ export default function SellerDashboard({
               radiusKm={currentSeller.coverageRadius}
               label="Your Registered Supply Hub Base"
               readonly={true}
+              sellers={allSellers}
             />
           </div>
         </div>
@@ -1130,6 +1144,7 @@ export default function SellerDashboard({
                 radiusKm={Number(coverageRadius)}
                 label={`${businessName || currentSeller.name}'s warehouse geofence bounds`}
                 readonly={true}
+                sellers={allSellers}
               />
             </div>
 
