@@ -1,0 +1,29 @@
+{
+  "short_name": "FreshMarket",
+  "name": "FreshMarket Agri-Business Network",
+  "description": "Premium direct supply chain trading network serving growers, retailers, wholesalers, and home consumers with real-time route mappings and secure verified handovers.",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/192/cherries.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/cherries.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/cherries.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#f8fafc",
+  "theme_color": "#059669",
+  "display": "standalone",
+  "orientation": "portrait",
+  "categories": ["business", "finance", "shopping", "utilities"]
+}

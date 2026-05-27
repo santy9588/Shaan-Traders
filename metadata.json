@@ -1,0 +1,10 @@
+{
+  "name": "Remix: FreshMarket",
+  "description": "An online business platform for buying and selling fresh vegetables and fruits with roles for farmers, wholesalers, retailers, and suppliers, integrated with Google Maps, OTP verification, custom admin controls, and billing.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
